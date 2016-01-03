@@ -1,0 +1,8 @@
+[submodule "external/eos"]
+	path = external/eos
+	url = https://github.com/patrikhuber/eos.git
+	branch = devel
+[submodule "external/superviseddescent"]
+	path = external/superviseddescent
+	url = https://github.com/patrikhuber/superviseddescent.git
+	branch = devel
