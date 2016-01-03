@@ -1,0 +1,26 @@
+# Mechanism via FindLIB.cmake
+# ==============================
+# Boost:
+# -------
+# Windows: Download the pre-built binaries from http://sourceforge.net/projects/boost/files/boost-binaries/ for VS2015 (msvc-14 64bit).
+# Set the windows PATH variable to "<YOUR_BOOST_DIRECTORY>\lib64-msvc-14.0" and CMake should find it. You may also need:
+#set(BOOST_ROOT     "C:/boost/boost_1_59_0"    CACHE STRING "Boost search location" FORCE)
+# Linux: Boost can usually be installed via a package manager (e.g. apt-get install boost-all-dev) and this variable can be left uncommented.
+#set(BOOST_ROOT     "/home/user/boost/install"    CACHE STRING "Boost search location" FORCE)
+
+# Eigen3:
+# -------
+# Windows: Set to the path of the unzipped Eigen3 file.
+#set(EIGEN3_INCLUDE_DIR "C:\\eigen\\eigen-bdd17ee3b1b3\\" CACHE STRING "Directory of the Eigen3 headers" FORCE)
+# Linux: Can be left empty when installed system-wide. Otherwise, set the path manually.
+#set(EIGEN3_INCLUDE_DIR "/home/user/eigen-bdd17ee3b1b3/" CACHE STRING "Directory of the Eigen3 headers" FORCE)
+
+
+# Mechanism via ConfigLIB.cmake in 3rd party library directory
+# ==============================
+# OpenCV:
+# -------
+# Windows: You need a version with binaries for VS2015 (msvc-14). OpenCV 3.1.0 contains them, you can also build 3.0 or the latest 2.4 branch (2.4.12) on GitHub from source. Set this path accordingly.
+#set(OpenCV_DIR   "C:\\opencv\\install"   CACHE STRING "OpenCV config dir, where OpenCVConfig.cmake can be found" FORCE)
+# Linux: Usually can be left blank but it can be used if OpenCV is not found.
+#set(OpenCV_DIR   "/home/user/opencv/install/share/OpenCV"   CACHE STRING "OpenCV config dir, where OpenCVConfig.cmake can be found" FORCE)

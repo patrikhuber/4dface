@@ -1,0 +1,292 @@
+/*
+ * 4dface: Real-time 3D face tracking and reconstruction from 2D video.
+ *
+ * File: apps/helpers.hpp
+ *
+ * Copyright 2015, 2016 Patrik Huber
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
+
+#ifndef APP_HELPERS_HPP_
+#define APP_HELPERS_HPP_
+
+#include "eos/core/Landmark.hpp"
+#include "eos/core/LandmarkMapper.hpp"
+#include "eos/morphablemodel/MorphableModel.hpp"
+#include "eos/morphablemodel/Blendshape.hpp"
+#include "rcr/landmark.hpp"
+
+#include "opencv2/core/core.hpp"
+
+#include <vector>
+#include <algorithm>
+#include <iterator>
+#include <cassert>
+
+/**
+ * @brief Scales and translates a facebox. Useful for converting
+ * between face boxes from different face detectors.
+ *
+ * To convert from V&J faceboxes to ibug faceboxes, use a scaling
+ * of 0.85 and a translation_y of 0.2.
+ * Ideally, we would learn the exact parameters from data.
+ *
+ * @param[in] facebox Input facebox.
+ * @param[in] scaling The input facebox will be scaled by this factor.
+ * @param[in] translation_y How much, in percent of the original facebox's width, the facebox will be translated in y direction. A positive value means facebox moves downwards.
+ * @return The rescaled facebox.
+ */
+cv::Rect rescale_facebox(cv::Rect facebox, float scaling, float translation_y)
+{
+	// Assumes a square input facebox to work? (width==height)
+	const auto new_width = facebox.width * scaling;
+	const auto smaller_in_px = facebox.width - new_width;
+	const auto new_tl = facebox.tl() + cv::Point2i(smaller_in_px / 2.0f, smaller_in_px / 2.0f);
+	const auto new_br = facebox.br() - cv::Point2i(smaller_in_px / 2.0f, smaller_in_px / 2.0f);
+	cv::Rect rescaled_facebox(new_tl, new_br);
+	rescaled_facebox.y += facebox.width * translation_y;
+	return rescaled_facebox;
+};
+
+/**
+ * @brief Converts an rcr::LandmarkCollection to an eos::core::LandmarkCollection.
+ *
+ * They are identical types, it would be great to remove that conversion, but then
+ * we'd have to make one of the libraries dependent on the other, which I don't like.
+ *
+ * @param[in] landmark_collection Input rcr::LandmarkCollection.
+ * @return Identical eos::core::LandmarkCollection.
+ */
+auto rcr_to_eos_landmark_collection(const rcr::LandmarkCollection<cv::Vec2f>& landmark_collection)
+{
+	eos::core::LandmarkCollection<cv::Vec2f> eos_landmark_collection;
+	std::transform(begin(landmark_collection), end(landmark_collection), std::back_inserter(eos_landmark_collection), [](auto&& lm) { return eos::core::Landmark<cv::Vec2f>{ lm.name, lm.coordinates }; });
+	return eos_landmark_collection;
+};
+
+/**
+ * @brief Calculates the bounding box that encloses the landmarks.
+ *
+ * The bounding box will not be square.
+ *
+ * @param[in] landmarks Landmarks.
+ * @return The enclosing bounding box.
+ */
+template<class T = int>
+cv::Rect_<T> get_enclosing_bbox(cv::Mat landmarks)
+{
+	auto num_landmarks = landmarks.cols / 2;
+	double min_x_val, max_x_val, min_y_val, max_y_val;
+	cv::minMaxLoc(landmarks.colRange(0, num_landmarks), &min_x_val, &max_x_val);
+	cv::minMaxLoc(landmarks.colRange(num_landmarks, landmarks.cols), &min_y_val, &max_y_val);
+	return cv::Rect_<T>(min_x_val, min_y_val, max_x_val - min_x_val, max_y_val - min_y_val);
+};
+
+/**
+ * @brief Makes the given face bounding box square by enlarging the
+ * smaller of the width or height to be equal to the bigger one.
+ *
+ * @param[in] bounding_box Input bounding box.
+ * @return The bounding box with equal width and height.
+ */
+cv::Rect make_bbox_square(cv::Rect bounding_box)
+{
+	auto center_x = bounding_box.x + bounding_box.width / 2.0;
+	auto center_y = bounding_box.y + bounding_box.height / 2.0;
+	auto box_size = std::max(bounding_box.width, bounding_box.height);
+	return cv::Rect(center_x - box_size / 2.0, center_y - box_size / 2.0, box_size, box_size);
+};
+
+/**
+ * @brief Takes LandmarkCollection of 2D landmarks and, using the landmark_mapper, find the
+ * corresponding 3D vertex indices and returns them, along with the coordinates of the 3D point.
+ *
+ * The function only returns points which the landmark mapper was able to convert, and skips all
+ * points for which there is no mapping. Thus, the number of returned points might be smaller than
+ * the number of input points.
+ * All three output vectors have the same size and contain the points in the same order.
+ * landmarks can be an eos::core::LandmarkCollection<cv::Vec2f> or an rcr::LandmarkCollection<cv::Vec2f>.
+ *
+ * @param[in] landmarks A LandmarkCollection of 2D landmarks.
+ * @param[in] landmark_mapper A mapper which maps the 2D landmark identifiers to 3D model vertex indices.
+ * @param[in] morphable_model Model to get the 3D point coordinates from.
+ * @return A tuple of <image_points, model_points, vertex_indices>.
+ */
+template<class T>
+auto get_corresponding_pointset(const T& landmarks, const eos::core::LandmarkMapper& landmark_mapper, const eos::morphablemodel::MorphableModel& morphable_model)
+{
+	using cv::Mat;
+	using std::vector;
+	using cv::Vec2f;
+	using cv::Vec4f;
+
+	// These will be the final 2D and 3D points used for the fitting:
+	vector<Vec4f> model_points; // the points in the 3D shape model
+	vector<int> vertex_indices; // their vertex indices
+	vector<Vec2f> image_points; // the corresponding 2D landmark points
+
+	// Sub-select all the landmarks which we have a mapping for (i.e. that are defined in the 3DMM):
+	for (int i = 0; i < landmarks.size(); ++i) {
+		auto converted_name = landmark_mapper.convert(landmarks[i].name);
+		if (!converted_name) { // no mapping defined for the current landmark
+			continue;
+		}
+		int vertex_idx = std::stoi(converted_name.get());
+		Vec4f vertex = morphable_model.get_shape_model().get_mean_at_point(vertex_idx);
+		model_points.emplace_back(vertex);
+		vertex_indices.emplace_back(vertex_idx);
+		image_points.emplace_back(landmarks[i].coordinates);
+	}
+	return std::make_tuple(image_points, model_points, vertex_indices);
+};
+
+/**
+ * @brief Concatenates two std::vector's of the same type and returns the concatenated
+ * vector. The elements of the second vector are appended after the first one.
+ *
+ * @param[in] vec_a First vector.
+ * @param[in] vec_b Second vector.
+ * @return The concatenated vector.
+ */
+template <class T>
+auto concat(const std::vector<T>& vec_a, const std::vector<T>& vec_b)
+{
+	std::vector<T> concatenated_vec;
+	concatenated_vec.reserve(vec_a.size() + vec_b.size());
+	concatenated_vec.insert(std::end(concatenated_vec), std::begin(vec_a), std::end(vec_a));
+	concatenated_vec.insert(std::end(concatenated_vec), std::begin(vec_b), std::end(vec_b));
+	return concatenated_vec;
+};
+
+/**
+ * @brief Copies the blendshapes into a matrix, with each column being a blendshape.
+ *
+ * @param[in] blendshapes Vector of blendshapes.
+ * @return The resulting matrix.
+ */
+cv::Mat to_matrix(const std::vector<eos::morphablemodel::Blendshape>& blendshapes)
+{
+	cv::Mat blendshapes_as_basis(blendshapes[0].deformation.rows, blendshapes.size(), CV_32FC1); // assert blendshapes.size() > 0 and all of them have same number of rows, and 1 col
+	for (int i = 0; i < blendshapes.size(); ++i)
+	{
+		blendshapes[i].deformation.copyTo(blendshapes_as_basis.col(i));
+	}
+	return blendshapes_as_basis;
+};
+
+/**
+ * @brief Merges isomaps from a live video with a weighted averaging, based
+ * on the view angle of each vertex to the camera.
+ *
+ * An optional merge_threshold can be specified upon construction. Pixels with
+ * a view-angle above that threshold will be completely discarded. All pixels
+ * below the threshold are merged with a weighting based on its vertex view-angle.
+ * Assumes the isomaps to be 512x512.
+ */
+class WeightedIsomapAveraging
+{
+public:
+	/**
+	 * @brief Constructs a new object that will hold the current averaged isomap and
+	 * be able to add frames from a live video and merge them on-the-fly.
+	 *
+	 * The threshold means: Each triangle with a view angle smaller than the given angle will be used to merge.
+	 * The default threshold (90°) means all triangles, as long as they're a little bit visible, are merged.
+	 *
+	 * @param[in] merge_threshold View-angle merge threshold, in degrees, from 0 to 90.
+	 */
+	WeightedIsomapAveraging(float merge_threshold = 90.0f)
+	{
+		assert(merge_threshold >= 0.f && merge_threshold <= 90.f);
+
+		visibility_counter = cv::Mat::zeros(512, 512, CV_32SC1);
+		merged_isomap = cv::Mat::zeros(512, 512, CV_32FC4);
+
+		// map 0° to 255, 90° to 0:
+		float alpha_thresh = (-255.f / 90.f) * merge_threshold + 255.f;
+		if (alpha_thresh < 0.f) // could maybe happen due to float inaccuracies / rounding?
+			alpha_thresh = 0.0f;
+		threshold = static_cast<unsigned char>(alpha_thresh);
+	};
+
+	/**
+	 * @brief Merges the given new isomap with all previously processed isomaps.
+	 *
+	 * @param[in] isomap The new isomap to add.
+	 * @return The merged isomap of all images processed so far, as 8UC4.
+	 */
+	cv::Mat add_and_merge(const cv::Mat& isomap)
+	{
+		// Merge isomaps, add the current to the already merged, pixel by pixel:
+		for (int r = 0; r < isomap.rows; ++r)
+		{
+			for (int c = 0; c < isomap.cols; ++c)
+			{
+				if (isomap.at<cv::Vec4b>(r, c)[3] <= threshold)
+				{
+					continue; // ignore this pixel, not visible in the extracted isomap of this current frame
+				}
+				// we're sure to have a visible pixel, merge it:
+				// merged_pixel = (old_average * visible_count + new_pixel) / (visible_count + 1)
+				merged_isomap.at<cv::Vec4f>(r, c)[0] = (merged_isomap.at<cv::Vec4f>(r, c)[0] * visibility_counter.at<int>(r, c) + isomap.at<cv::Vec4b>(r, c)[0]) / (visibility_counter.at<int>(r, c) + 1);
+				merged_isomap.at<cv::Vec4f>(r, c)[1] = (merged_isomap.at<cv::Vec4f>(r, c)[1] * visibility_counter.at<int>(r, c) + isomap.at<cv::Vec4b>(r, c)[1]) / (visibility_counter.at<int>(r, c) + 1);
+				merged_isomap.at<cv::Vec4f>(r, c)[2] = (merged_isomap.at<cv::Vec4f>(r, c)[2] * visibility_counter.at<int>(r, c) + isomap.at<cv::Vec4b>(r, c)[2]) / (visibility_counter.at<int>(r, c) + 1);
+				merged_isomap.at<cv::Vec4f>(r, c)[3] = 255; // as soon as we've seen the pixel visible once, we set it to visible.
+				++visibility_counter.at<int>(r, c);
+			}
+		}
+		cv::Mat merged_isomap_uchar;
+		merged_isomap.convertTo(merged_isomap_uchar, CV_8UC4);
+		return merged_isomap_uchar;
+	};
+
+private:
+	cv::Mat visibility_counter;
+	cv::Mat merged_isomap;
+	unsigned char threshold;
+};
+
+/**
+ * @brief Merges PCA coefficients from a live video with a simple averaging.
+ */
+class PcaCoefficientMerging
+{
+public:
+	/**
+	 * @brief Merges the given new PCA coefficients with all previously processed coefficients.
+	 *
+	 * @param[in] coefficients The new coefficients to add.
+	 * @return The merged coefficients of all images processed so far.
+	 */
+	std::vector<float> add_and_merge(const std::vector<float>& coefficients)
+	{
+		if (merged_shape_coefficients.empty())
+		{
+			merged_shape_coefficients = cv::Mat::zeros(coefficients.size(), 1, CV_32FC1);
+		}
+		assert(coefficients.size() == merged_shape_coefficients.rows);
+
+		cv::Mat test(coefficients);
+		merged_shape_coefficients = (merged_shape_coefficients * num_processed_frames + test) / (num_processed_frames + 1.0f);
+		++num_processed_frames;
+		return std::vector<float>(merged_shape_coefficients.begin<float>(), merged_shape_coefficients.end<float>());
+	};
+
+private:
+	int num_processed_frames = 0;
+	cv::Mat merged_shape_coefficients;
+};
+
+#endif /* APP_HELPERS_HPP_ */
