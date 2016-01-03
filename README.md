@@ -10,9 +10,10 @@
 [webpage]: http://www.4dface.org
 
 This is a demo app showing face tracking and 3D Morphable Model fitting on live webcams and videos. It builds upon the 3D face model library [eos](https://github.com/patrikhuber/eos) and the landmark detection and optimisation library [superviseddescent](https://github.com/patrikhuber/superviseddescent).
+
 (_caveat: due to recent additions, "real time" at the moment means around 5 fps._)
 
-## How to
+## Build & run
 
 1. Clone with submodules: `git clone --recursive git://github.com/patrikhuber/4dface.git`, or, if you've already cloned it, get the submodules with `git submodule update --init --recursive` inside the `4dface` directory.
 
