@@ -1,12 +1,14 @@
 # 4dface: Real-time 3D face tracking and reconstruction from 2D video
-[![GitHub release](http://img.shields.io/github/release/patrikhuber/4dface.svg?style=flat-square)][release]
+[![Latest release](http://img.shields.io/github/release/patrikhuber/4dface.svg?style=flat-square)][release]
+[![Linux build status of master branch](https://img.shields.io/travis/patrikhuber/4dface/master.svg?style=flat-square&label=Linux%3A%20build)][travis]
+[![Windows build status of master branch](https://ci.appveyor.com/api/projects/status/ed5slvlhl0lpbu8j/branch/master?svg=true&passingText=Windows%3A%20build%20passing&failingText=Windows%3A%20build%20failing&pendingText=Windows%3A%20build%20pending)][appveyor]
 [![Apache License 2.0](https://img.shields.io/github/license/patrikhuber/4dface.svg?style=flat-square)][license]
-[![Build Status](https://img.shields.io/travis/patrikhuber/4dface.svg?style=flat-square)][travis]
 [![Webpage](https://img.shields.io/badge/webpage-www.4dface.org-blue.svg?style=flat-square)][webpage]
 
 [release]: https://github.com/patrikhuber/4dface/releases
-[license]: https://github.com/patrikhuber/4dface/blob/master/LICENSE
 [travis]: https://travis-ci.org/patrikhuber/4dface
+[appveyor]: https://ci.appveyor.com/project/patrikhuber/4dface/branch/master
+[license]: https://github.com/patrikhuber/4dface/blob/master/LICENSE
 [webpage]: http://www.4dface.org
 
 This is a demo app showing face tracking and 3D Morphable Model fitting on live webcams and videos. It builds upon the 3D face model library [eos](https://github.com/patrikhuber/eos) and the landmark detection and optimisation library [superviseddescent](https://github.com/patrikhuber/superviseddescent).
