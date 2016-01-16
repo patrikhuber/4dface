@@ -58,6 +58,11 @@ if(NOT EXISTS "${OpenCV_haarcascades_DIR}/haarcascade_frontalface_alt2.xml")
 	message(FATAL_ERROR "Could not find OpenCV's face detector haarcascade_frontalface_alt2.xml in ${OpenCV_haarcascades_DIR}. Please set OpenCV_haarcascades_DIR to the directory with that file.")
 endif()
 
+if(MSVC)
+	# The standard find_package for boost on Win finds the dynamic libs, so for dynamic linking to boost we need to #define:
+	add_definitions(-DBOOST_ALL_NO_LIB) # Don't use the automatic library linking by boost with VS (#pragma ...). Instead, we specify everything here in cmake.
+	add_definitions(-DBOOST_ALL_DYN_LINK) # Link against the dynamic boost lib - needs to match with the version that find_package finds.
+endif()
 find_package(Boost 1.48.0 COMPONENTS system filesystem program_options REQUIRED)
 if(Boost_FOUND)
   message(STATUS "Boost found at ${Boost_INCLUDE_DIRS}")
