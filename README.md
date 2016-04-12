@@ -33,7 +33,7 @@ This is a demo app showing face tracking and 3D Morphable Model fitting on live 
 
     2. `cmake -DCMAKE_INSTALL_PREFIX=../install -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-5 -DCMAKE_CXX_COMPILER=g++-5 -DOpenCV_haarcascades_DIR=/usr/share/opencv/haarcascades/ ../4dface/`
 
-    On Windows, add `-G "Visual Studio 14 Win64"`. Also, you will probably need to add `-C ../4dface/initial_cache.cmake` as first argument - copy the file from `initial_cache.cmake.template` and adjust the paths.
+    On Windows, add `-G "Visual Studio 14 2015 Win64"`. Also, you will probably need to add `-C ../4dface/initial_cache.cmake` as first argument - copy the file from `initial_cache.cmake.template` and adjust the paths.
 
     If you get an error about OpenCV\_haarcascades\_DIR, adjust `-DOpenCV_haarcascades_DIR` to point to the directory of `haarcascade_frontalface_alt2.xml` from OpenCV.
 
