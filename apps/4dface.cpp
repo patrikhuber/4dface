@@ -22,8 +22,9 @@
 #include "eos/core/Landmark.hpp"
 #include "eos/core/LandmarkMapper.hpp"
 #include "eos/fitting/fitting.hpp"
-#include "eos/fitting/nonlinear_camera_estimation.hpp"
+#include "eos/fitting/orthographic_camera_estimation_linear.hpp"
 #include "eos/fitting/contour_correspondence.hpp"
+#include "eos/fitting/RenderingParameters.hpp"
 #include "eos/render/utils.hpp"
 #include "eos/render/render.hpp"
 #include "eos/render/texture_extraction.hpp"
@@ -200,7 +201,8 @@ int main(int argc, char *argv[])
 		vector<Vec4f> model_points; // the corresponding points in the 3D shape model
 		vector<int> vertex_indices; // their vertex indices
 		std::tie(image_points, model_points, vertex_indices) = get_corresponding_pointset(current_landmarks, landmark_mapper, morphable_model);
-		auto rendering_params = fitting::estimate_orthographic_camera(image_points, model_points, frame.cols, frame.rows);
+		auto scaled_ortho_projection = fitting::estimate_orthographic_projection_linear(image_points, model_points, true, frame.rows);
+		auto rendering_params = fitting::RenderingParameters(scaled_ortho_projection, frame.cols, frame.rows);
 
 		// Given the estimated pose, find 2D-3D contour correspondences:
 		// These are the additional contour correspondences we're going to find and then use:
@@ -215,7 +217,8 @@ int main(int argc, char *argv[])
 		image_points = concat(image_points, image_points_contour);
 
 		// Re-estimate the pose with all landmarks, including the contour landmarks:
-		rendering_params = fitting::estimate_orthographic_camera(image_points, model_points, frame.cols, frame.rows);
+		scaled_ortho_projection = fitting::estimate_orthographic_projection_linear(image_points, model_points, true, frame.rows);
+		rendering_params = fitting::RenderingParameters(scaled_ortho_projection, frame.cols, frame.rows);
 		Mat affine_cam = fitting::get_3x4_affine_camera_matrix(rendering_params, frame.cols, frame.rows);
 
 		// Fit the PCA shape model and expression blendshapes:
