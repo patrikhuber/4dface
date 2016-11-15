@@ -32,6 +32,7 @@
 #include "cereal/cereal.hpp"
 
 #include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/quaternion.hpp"
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -202,15 +203,12 @@ int main(int argc, char *argv[])
 		auto rendering_params = fitting::estimate_orthographic_camera(image_points, model_points, frame.cols, frame.rows);
 
 		// Given the estimated pose, find 2D-3D contour correspondences:
-		auto view_model = fitting::get_4x4_modelview_matrix(rendering_params);
-		auto ortho_projection = glm::ortho(rendering_params.frustum.l, rendering_params.frustum.r, rendering_params.frustum.b, rendering_params.frustum.t);
-		glm::vec4 viewport(0, frame.rows, frame.cols, -frame.rows); // flips y, origin top-left, like in OpenCV	
 		// These are the additional contour correspondences we're going to find and then use:
 		vector<Vec2f> image_points_contour;
 		vector<Vec4f> model_points_contour;
 		vector<int> vertex_indices_contour;
 		// For each 2D contour landmark, get the corresponding 3D vertex point and vertex id:
-		std::tie(image_points_contour, model_points_contour, vertex_indices_contour) = fitting::get_contour_correspondences(rcr_to_eos_landmark_collection(current_landmarks), ibug_contour, model_contour, glm::degrees(rendering_params.r_y), morphable_model, view_model, ortho_projection, viewport);
+		std::tie(image_points_contour, model_points_contour, vertex_indices_contour) = fitting::get_contour_correspondences(rcr_to_eos_landmark_collection(current_landmarks), ibug_contour, model_contour, glm::degrees(glm::eulerAngles(rendering_params.get_rotation())[1]), morphable_model, rendering_params.get_modelview(), rendering_params.get_projection(), fitting::get_opencv_viewport(frame.cols, frame.rows));
 		// Add the contour correspondences to the set of landmarks that we use for the fitting:
 		model_points = concat(model_points, model_points_contour);
 		vertex_indices = concat(vertex_indices, vertex_indices_contour);
@@ -222,10 +220,10 @@ int main(int argc, char *argv[])
 
 		// Fit the PCA shape model and expression blendshapes:
 		vector<float> shape_coefficients, blendshape_coefficients;
-		Mat shape_instance = fitting::fit_shape_model(affine_cam, morphable_model, blendshapes, image_points, vertex_indices, 10.0f, shape_coefficients, blendshape_coefficients);
+		Mat shape_instance = fitting::fit_shape(affine_cam, morphable_model, blendshapes, image_points, vertex_indices, 10.0f, boost::none, shape_coefficients, blendshape_coefficients);
 
 		// Draw the 3D pose of the face:
-		draw_axes_topright(rendering_params.r_x, rendering_params.r_y, rendering_params.r_z, frame);
+		draw_axes_topright(glm::eulerAngles(rendering_params.get_rotation())[0], glm::eulerAngles(rendering_params.get_rotation())[1], glm::eulerAngles(rendering_params.get_rotation())[2], frame);
 
 		// Get the fitted mesh, extract the texture:
 		render::Mesh mesh = morphablemodel::detail::sample_to_mesh(shape_instance, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
@@ -235,12 +233,15 @@ int main(int argc, char *argv[])
 		Mat merged_isomap = isomap_averaging.add_and_merge(isomap);
 		// Same for the shape:
 		shape_coefficients = pca_shape_merging.add_and_merge(shape_coefficients);
-		auto merged_shape = morphable_model.get_shape_model().draw_sample(shape_coefficients) + to_matrix(blendshapes) * Mat(blendshape_coefficients);
+		auto merged_shape = morphable_model.get_shape_model().draw_sample(shape_coefficients) + morphablemodel::to_matrix(blendshapes) * Mat(blendshape_coefficients);
 		render::Mesh merged_mesh = morphablemodel::detail::sample_to_mesh(merged_shape, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
 
 		// Render the model in a separate window using the estimated pose, shape and merged texture:
 		Mat rendering;
-		std::tie(rendering, std::ignore) = render::render(merged_mesh, fitting::to_mat(glm::rotate(glm::mat4(1.0f), rendering_params.r_z, glm::vec3{ 0.0f, 0.0f, 1.0f }) * glm::rotate(glm::mat4(1.0f), rendering_params.r_x, glm::vec3{ 1.0f, 0.0f, 0.0f }) * glm::rotate(glm::mat4(1.0f), rendering_params.r_y, glm::vec3{ 0.0f, 1.0f, 0.0f })), fitting::to_mat(glm::ortho(-130.0f, 130.0f, -130.0f, 130.0f)), 256, 256, render::create_mipmapped_texture(merged_isomap), true, false, false);
+		auto modelview_no_translation = rendering_params.get_modelview();
+		modelview_no_translation[3][0] = 0;
+		modelview_no_translation[3][1] = 0;
+		std::tie(rendering, std::ignore) = render::render(merged_mesh, modelview_no_translation, glm::ortho(-130.0f, 130.0f, -130.0f, 130.0f), 256, 256, render::create_mipmapped_texture(merged_isomap), true, false, false);
 		cv::imshow("render", rendering);
 
 		cv::imshow("video", frame);

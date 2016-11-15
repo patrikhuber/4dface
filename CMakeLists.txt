@@ -83,7 +83,7 @@ set(superviseddescent_DIR "${CMAKE_SOURCE_DIR}/external/superviseddescent")
 set(eos_INCLUDE_DIR "${eos_DIR}/include")
 set(superviseddescent_INCLUDE_DIR "${superviseddescent_DIR}/include")
 set(cereal_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/cereal-1.1.1/include")
-set(glm_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/glm-0.9.7.0")
+set(glm_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/glm")
 
 # The new model is not in the repository, download it manually for now:
 if(NOT EXISTS "face_landmarks_model_rcr_68.bin")
