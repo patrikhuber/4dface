@@ -2,7 +2,7 @@ project(4dface)
 cmake_minimum_required(VERSION 2.8.10)
 set(4dface_VERSION_MAJOR 0)
 set(4dface_VERSION_MINOR 1)
-set(4dface_VERSION_PATCH 0)
+set(4dface_VERSION_PATCH 1)
 set(4dface_VERSION ${4dface_VERSION_MAJOR}.${4dface_VERSION_MINOR}.${4dface_VERSION_PATCH})
 
 # Check if a supported compiler is used and add c++14 flag:
