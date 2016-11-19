@@ -171,22 +171,6 @@ auto concat(const std::vector<T>& vec_a, const std::vector<T>& vec_b)
 };
 
 /**
- * @brief Copies the blendshapes into a matrix, with each column being a blendshape.
- *
- * @param[in] blendshapes Vector of blendshapes.
- * @return The resulting matrix.
- */
-cv::Mat to_matrix(const std::vector<eos::morphablemodel::Blendshape>& blendshapes)
-{
-	cv::Mat blendshapes_as_basis(blendshapes[0].deformation.rows, blendshapes.size(), CV_32FC1); // assert blendshapes.size() > 0 and all of them have same number of rows, and 1 col
-	for (int i = 0; i < blendshapes.size(); ++i)
-	{
-		blendshapes[i].deformation.copyTo(blendshapes_as_basis.col(i));
-	}
-	return blendshapes_as_basis;
-};
-
-/**
  * @brief Merges isomaps from a live video with a weighted averaging, based
  * on the view angle of each vertex to the camera.
  *
