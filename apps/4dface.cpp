@@ -24,6 +24,7 @@
 #include "eos/fitting/fitting.hpp"
 #include "eos/fitting/orthographic_camera_estimation_linear.hpp"
 #include "eos/fitting/contour_correspondence.hpp"
+#include "eos/fitting/closest_edge_fitting.hpp"
 #include "eos/fitting/RenderingParameters.hpp"
 #include "eos/render/utils.hpp"
 #include "eos/render/render.hpp"
@@ -34,6 +35,8 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/quaternion.hpp"
+
+#include "Eigen/Dense"
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -67,7 +70,7 @@ void draw_axes_topright(float r_x, float r_y, float r_z, cv::Mat image);
  */
 int main(int argc, char *argv[])
 {
-	fs::path modelfile, inputvideo, facedetector, landmarkdetector, mappingsfile, contourfile, blendshapesfile;
+	fs::path modelfile, inputvideo, facedetector, landmarkdetector, mappingsfile, contourfile, edgetopologyfile, blendshapesfile;
 	try {
 		po::options_description desc("Allowed options");
 		desc.add_options()
@@ -83,6 +86,8 @@ int main(int argc, char *argv[])
 				"landmark identifier to model vertex number mapping")
 			("model-contour,c", po::value<fs::path>(&contourfile)->required()->default_value("../share/model_contours.json"),
 				"file with model contour indices")
+			("edge-topology,e", po::value<fs::path>(&edgetopologyfile)->required()->default_value("../share/sfm_3448_edge_topology.json"),
+				"file with model's precomputed edge topology")
 			("blendshapes,b", po::value<fs::path>(&blendshapesfile)->required()->default_value("../share/expression_blendshapes_3448.bin"),
 				"file with blendshapes")
 			("input,i", po::value<fs::path>(&inputvideo),
@@ -141,6 +146,8 @@ int main(int argc, char *argv[])
 	}
 
 	vector<morphablemodel::Blendshape> blendshapes = morphablemodel::load_blendshapes(blendshapesfile.string());
+
+	morphablemodel::EdgeTopology edge_topology = morphablemodel::load_edge_topology(edgetopologyfile.string());
 
 	cv::namedWindow("video", 1);
 	cv::namedWindow("render", 1);
@@ -204,17 +211,40 @@ int main(int argc, char *argv[])
 		auto scaled_ortho_projection = fitting::estimate_orthographic_projection_linear(image_points, model_points, true, frame.rows);
 		auto rendering_params = fitting::RenderingParameters(scaled_ortho_projection, frame.cols, frame.rows);
 
-		// Given the estimated pose, find 2D-3D contour correspondences:
+		// Given the estimated pose, find 2D-3D contour correspondences of the front-facing face contour:
 		// These are the additional contour correspondences we're going to find and then use:
 		vector<Vec2f> image_points_contour;
 		vector<Vec4f> model_points_contour;
 		vector<int> vertex_indices_contour;
 		// For each 2D contour landmark, get the corresponding 3D vertex point and vertex id:
-		std::tie(image_points_contour, model_points_contour, vertex_indices_contour) = fitting::get_contour_correspondences(rcr_to_eos_landmark_collection(current_landmarks), ibug_contour, model_contour, glm::degrees(glm::eulerAngles(rendering_params.get_rotation())[1]), morphable_model, rendering_params.get_modelview(), rendering_params.get_projection(), fitting::get_opencv_viewport(frame.cols, frame.rows));
+		auto yaw_angle = glm::degrees(glm::eulerAngles(rendering_params.get_rotation())[1]);
+		std::tie(image_points_contour, model_points_contour, vertex_indices_contour) = fitting::get_contour_correspondences(rcr_to_eos_landmark_collection(current_landmarks), ibug_contour, model_contour, yaw_angle, morphable_model, rendering_params.get_modelview(), rendering_params.get_projection(), fitting::get_opencv_viewport(frame.cols, frame.rows));
 		// Add the contour correspondences to the set of landmarks that we use for the fitting:
 		model_points = concat(model_points, model_points_contour);
 		vertex_indices = concat(vertex_indices, vertex_indices_contour);
 		image_points = concat(image_points, image_points_contour);
+
+		// Occluded edge fitting: Fit the occluding model contour to the detected contour landmarks:
+		vector<Eigen::Vector2f> occluding_contour_landmarks;
+		if (yaw_angle >= 0.0f) // positive yaw = subject looking to the left
+		{ // the left contour is the occluding one we want to use ("away-facing")
+			auto contour_landmarks_ = rcr::filter(current_landmarks, ibug_contour.left_contour);
+			std::for_each(begin(contour_landmarks_), end(contour_landmarks_), [&occluding_contour_landmarks](auto&& lm) { occluding_contour_landmarks.push_back({ lm.coordinates[0], lm.coordinates[1] }); });	
+		}
+		else {
+			auto contour_landmarks_ = rcr::filter(current_landmarks, ibug_contour.right_contour);
+			std::for_each(begin(contour_landmarks_), end(contour_landmarks_), [&occluding_contour_landmarks](auto&& lm) { occluding_contour_landmarks.push_back({ lm.coordinates[0], lm.coordinates[1] }); });
+		}
+
+		auto mean_mesh = morphable_model.get_mean();
+		auto edge_correspondences = fitting::find_occluding_edge_correspondences(mean_mesh, edge_topology, rendering_params, occluding_contour_landmarks, 200.0f);
+		// Add new edge correspondences:
+		image_points = fitting::concat(image_points, edge_correspondences.first);
+		vertex_indices = fitting::concat(vertex_indices, edge_correspondences.second);
+		for (const auto& e : edge_correspondences.second)
+		{
+			model_points.emplace_back(morphable_model.get_shape_model().get_mean_at_point(e));
+		}
 
 		// Re-estimate the pose with all landmarks, including the contour landmarks:
 		scaled_ortho_projection = fitting::estimate_orthographic_projection_linear(image_points, model_points, true, frame.rows);
