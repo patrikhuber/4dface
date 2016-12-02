@@ -85,6 +85,7 @@ set(superviseddescent_INCLUDE_DIR "${superviseddescent_DIR}/include")
 set(cereal_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/cereal-1.1.1/include")
 set(glm_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/glm")
 set(nanoflann_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/nanoflann/include")
+set(eigen3_nnls_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/eigen3-nnls/src")
 
 # The new model is not in the repository, download it manually for now:
 if(NOT EXISTS "face_landmarks_model_rcr_68.bin")
@@ -108,6 +109,7 @@ include_directories(${eos_INCLUDE_DIR})
 include_directories(${cereal_INCLUDE_DIR})
 include_directories(${glm_INCLUDE_DIR})
 include_directories(${nanoflann_INCLUDE_DIR})
+include_directories(${eigen3_nnls_INCLUDE_DIR})
 
 add_executable(4dface apps/4dface.cpp apps/helpers.hpp)
 target_link_libraries(4dface ${OpenCV_LIBS} ${Boost_LIBRARIES})

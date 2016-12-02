@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
 		vector<int> vertex_indices_contour;
 		// For each 2D contour landmark, get the corresponding 3D vertex point and vertex id:
 		auto yaw_angle = glm::degrees(glm::eulerAngles(rendering_params.get_rotation())[1]);
-		std::tie(image_points_contour, model_points_contour, vertex_indices_contour) = fitting::get_contour_correspondences(rcr_to_eos_landmark_collection(current_landmarks), ibug_contour, model_contour, yaw_angle, morphable_model, rendering_params.get_modelview(), rendering_params.get_projection(), fitting::get_opencv_viewport(frame.cols, frame.rows));
+		std::tie(image_points_contour, model_points_contour, vertex_indices_contour) = fitting::get_contour_correspondences(rcr_to_eos_landmark_collection(current_landmarks), ibug_contour, model_contour, yaw_angle, morphable_model.get_mean(), rendering_params.get_modelview(), rendering_params.get_projection(), fitting::get_opencv_viewport(frame.cols, frame.rows));
 		// Add the contour correspondences to the set of landmarks that we use for the fitting:
 		model_points = concat(model_points, model_points_contour);
 		vertex_indices = concat(vertex_indices, vertex_indices_contour);
@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
 		draw_axes_topright(glm::eulerAngles(rendering_params.get_rotation())[0], glm::eulerAngles(rendering_params.get_rotation())[1], glm::eulerAngles(rendering_params.get_rotation())[2], frame);
 
 		// Get the fitted mesh, extract the texture:
-		render::Mesh mesh = morphablemodel::detail::sample_to_mesh(shape_instance, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
+		render::Mesh mesh = morphablemodel::sample_to_mesh(shape_instance, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
 		Mat isomap = render::extract_texture(mesh, affine_cam, unmodified_frame, true, render::TextureInterpolation::NearestNeighbour, 512);
 
 		// Merge the isomaps - add the current one to the already merged ones:
@@ -267,7 +267,7 @@ int main(int argc, char *argv[])
 		// Same for the shape:
 		shape_coefficients = pca_shape_merging.add_and_merge(shape_coefficients);
 		auto merged_shape = morphable_model.get_shape_model().draw_sample(shape_coefficients) + morphablemodel::to_matrix(blendshapes) * Mat(blendshape_coefficients);
-		render::Mesh merged_mesh = morphablemodel::detail::sample_to_mesh(merged_shape, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
+		render::Mesh merged_mesh = morphablemodel::sample_to_mesh(merged_shape, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
 
 		// Render the model in a separate window using the estimated pose, shape and merged texture:
 		Mat rendering;
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
 		}
 		if (key == 's') {
 			// save an obj + current merged isomap to the disk:
-			render::Mesh neutral_expression = morphablemodel::detail::sample_to_mesh(morphable_model.get_shape_model().draw_sample(shape_coefficients), morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
+			render::Mesh neutral_expression = morphablemodel::sample_to_mesh(morphable_model.get_shape_model().draw_sample(shape_coefficients), morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
 			render::write_textured_obj(neutral_expression, "current_merged.obj");
 			cv::imwrite("current_merged.isomap.png", merged_isomap);
 		}
