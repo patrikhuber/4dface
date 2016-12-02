@@ -203,63 +203,18 @@ int main(int argc, char *argv[])
 			rcr::draw_landmarks(frame, current_landmarks, { 0, 255, 0 }); // green, the new optimised landmarks
 		}
 
-		// Fit the 3DMM. First, estimate the pose:
-		vector<Vec2f> image_points; // the 2D landmark points for which a mapping to the 3D model exists. A subset of all the detected landmarks.
-		vector<Vec4f> model_points; // the corresponding points in the 3D shape model
-		vector<int> vertex_indices; // their vertex indices
-		std::tie(image_points, model_points, vertex_indices) = get_corresponding_pointset(current_landmarks, landmark_mapper, morphable_model);
-		auto scaled_ortho_projection = fitting::estimate_orthographic_projection_linear(image_points, model_points, true, frame.rows);
-		auto rendering_params = fitting::RenderingParameters(scaled_ortho_projection, frame.cols, frame.rows);
-
-		// Given the estimated pose, find 2D-3D contour correspondences of the front-facing face contour:
-		// These are the additional contour correspondences we're going to find and then use:
-		vector<Vec2f> image_points_contour;
-		vector<Vec4f> model_points_contour;
-		vector<int> vertex_indices_contour;
-		// For each 2D contour landmark, get the corresponding 3D vertex point and vertex id:
-		auto yaw_angle = glm::degrees(glm::eulerAngles(rendering_params.get_rotation())[1]);
-		std::tie(image_points_contour, model_points_contour, vertex_indices_contour) = fitting::get_contour_correspondences(rcr_to_eos_landmark_collection(current_landmarks), ibug_contour, model_contour, yaw_angle, morphable_model.get_mean(), rendering_params.get_modelview(), rendering_params.get_projection(), fitting::get_opencv_viewport(frame.cols, frame.rows));
-		// Add the contour correspondences to the set of landmarks that we use for the fitting:
-		model_points = concat(model_points, model_points_contour);
-		vertex_indices = concat(vertex_indices, vertex_indices_contour);
-		image_points = concat(image_points, image_points_contour);
-
-		// Occluded edge fitting: Fit the occluding model contour to the detected contour landmarks:
-		vector<Eigen::Vector2f> occluding_contour_landmarks;
-		if (yaw_angle >= 0.0f) // positive yaw = subject looking to the left
-		{ // the left contour is the occluding one we want to use ("away-facing")
-			auto contour_landmarks_ = rcr::filter(current_landmarks, ibug_contour.left_contour);
-			std::for_each(begin(contour_landmarks_), end(contour_landmarks_), [&occluding_contour_landmarks](auto&& lm) { occluding_contour_landmarks.push_back({ lm.coordinates[0], lm.coordinates[1] }); });	
-		}
-		else {
-			auto contour_landmarks_ = rcr::filter(current_landmarks, ibug_contour.right_contour);
-			std::for_each(begin(contour_landmarks_), end(contour_landmarks_), [&occluding_contour_landmarks](auto&& lm) { occluding_contour_landmarks.push_back({ lm.coordinates[0], lm.coordinates[1] }); });
-		}
-
-		auto mean_mesh = morphable_model.get_mean();
-		auto edge_correspondences = fitting::find_occluding_edge_correspondences(mean_mesh, edge_topology, rendering_params, occluding_contour_landmarks, 200.0f);
-		// Add new edge correspondences:
-		image_points = fitting::concat(image_points, edge_correspondences.first);
-		vertex_indices = fitting::concat(vertex_indices, edge_correspondences.second);
-		for (const auto& e : edge_correspondences.second)
-		{
-			model_points.emplace_back(morphable_model.get_shape_model().get_mean_at_point(e));
-		}
-
-		// Re-estimate the pose with all landmarks, including the contour landmarks:
-		scaled_ortho_projection = fitting::estimate_orthographic_projection_linear(image_points, model_points, true, frame.rows);
-		rendering_params = fitting::RenderingParameters(scaled_ortho_projection, frame.cols, frame.rows);
-		Mat affine_cam = fitting::get_3x4_affine_camera_matrix(rendering_params, frame.cols, frame.rows);
-
-		// Fit the PCA shape model and expression blendshapes:
+		// Fit the 3DMM:
+		fitting::RenderingParameters rendering_params;
 		vector<float> shape_coefficients, blendshape_coefficients;
-		Mat shape_instance = fitting::fit_shape(affine_cam, morphable_model, blendshapes, image_points, vertex_indices, 10.0f, boost::none, shape_coefficients, blendshape_coefficients);
+		vector<Vec2f> image_points;
+		render::Mesh mesh;
+		std::tie(mesh, rendering_params) = fitting::fit_shape_and_pose(morphable_model, blendshapes, rcr_to_eos_landmark_collection(current_landmarks), landmark_mapper, unmodified_frame.cols, unmodified_frame.rows, edge_topology, ibug_contour, model_contour, 3, 5, 15.0f, boost::none, shape_coefficients, blendshape_coefficients, image_points);
+		Mat affine_cam = fitting::get_3x4_affine_camera_matrix(rendering_params, frame.cols, frame.rows);
 
 		// Draw the 3D pose of the face:
 		draw_axes_topright(glm::eulerAngles(rendering_params.get_rotation())[0], glm::eulerAngles(rendering_params.get_rotation())[1], glm::eulerAngles(rendering_params.get_rotation())[2], frame);
 
 		// Get the fitted mesh, extract the texture:
-		render::Mesh mesh = morphablemodel::sample_to_mesh(shape_instance, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
 		Mat isomap = render::extract_texture(mesh, affine_cam, unmodified_frame, true, render::TextureInterpolation::NearestNeighbour, 512);
 
 		// Merge the isomaps - add the current one to the already merged ones:
