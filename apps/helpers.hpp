@@ -26,7 +26,11 @@
 #include "eos/core/LandmarkMapper.hpp"
 #include "eos/morphablemodel/MorphableModel.hpp"
 #include "eos/morphablemodel/Blendshape.hpp"
+#include "eos/render/detail/render_detail.hpp"
 #include "rcr/landmark.hpp"
+
+#include "glm/mat4x4.hpp"
+#include "glm/gtc/matrix_transform.hpp"
 
 #include "opencv2/core/core.hpp"
 
@@ -110,64 +114,31 @@ cv::Rect make_bbox_square(cv::Rect bounding_box)
 };
 
 /**
- * @brief Takes LandmarkCollection of 2D landmarks and, using the landmark_mapper, find the
- * corresponding 3D vertex indices and returns them, along with the coordinates of the 3D point.
+ * Draws the given mesh as wireframe into the image.
  *
- * The function only returns points which the landmark mapper was able to convert, and skips all
- * points for which there is no mapping. Thus, the number of returned points might be smaller than
- * the number of input points.
- * All three output vectors have the same size and contain the points in the same order.
- * landmarks can be an eos::core::LandmarkCollection<cv::Vec2f> or an rcr::LandmarkCollection<cv::Vec2f>.
+ * It does backface culling, i.e. draws only vertices in CCW order.
  *
- * @param[in] landmarks A LandmarkCollection of 2D landmarks.
- * @param[in] landmark_mapper A mapper which maps the 2D landmark identifiers to 3D model vertex indices.
- * @param[in] morphable_model Model to get the 3D point coordinates from.
- * @return A tuple of <image_points, model_points, vertex_indices>.
+ * @param[in] image An image to draw into.
+ * @param[in] mesh The mesh to draw.
+ * @param[in] modelview Model-view matrix to draw the mesh.
+ * @param[in] projection Projection matrix to draw the mesh.
+ * @param[in] viewport Viewport to draw the mesh.
+ * @param[in] colour Colour of the mesh to be drawn.
  */
-template<class T>
-auto get_corresponding_pointset(const T& landmarks, const eos::core::LandmarkMapper& landmark_mapper, const eos::morphablemodel::MorphableModel& morphable_model)
+void draw_wireframe(cv::Mat image, const eos::render::Mesh& mesh, glm::mat4x4 modelview, glm::mat4x4 projection, glm::vec4 viewport, cv::Scalar colour = cv::Scalar(0, 255, 0, 255))
 {
-	using cv::Mat;
-	using std::vector;
-	using cv::Vec2f;
-	using cv::Vec4f;
-
-	// These will be the final 2D and 3D points used for the fitting:
-	vector<Vec4f> model_points; // the points in the 3D shape model
-	vector<int> vertex_indices; // their vertex indices
-	vector<Vec2f> image_points; // the corresponding 2D landmark points
-
-	// Sub-select all the landmarks which we have a mapping for (i.e. that are defined in the 3DMM):
-	for (int i = 0; i < landmarks.size(); ++i) {
-		auto converted_name = landmark_mapper.convert(landmarks[i].name);
-		if (!converted_name) { // no mapping defined for the current landmark
-			continue;
+	for (const auto& triangle : mesh.tvi)
+	{
+		const auto p1 = glm::project({ mesh.vertices[triangle[0]][0], mesh.vertices[triangle[0]][1], mesh.vertices[triangle[0]][2] }, modelview, projection, viewport);
+		const auto p2 = glm::project({ mesh.vertices[triangle[1]][0], mesh.vertices[triangle[1]][1], mesh.vertices[triangle[1]][2] }, modelview, projection, viewport);
+		const auto p3 = glm::project({ mesh.vertices[triangle[2]][0], mesh.vertices[triangle[2]][1], mesh.vertices[triangle[2]][2] }, modelview, projection, viewport);
+		if (eos::render::detail::are_vertices_ccw_in_screen_space(glm::vec2(p1), glm::vec2(p2), glm::vec2(p3)))
+		{
+			cv::line(image, cv::Point(p1.x, p1.y), cv::Point(p2.x, p2.y), colour);
+			cv::line(image, cv::Point(p2.x, p2.y), cv::Point(p3.x, p3.y), colour);
+			cv::line(image, cv::Point(p3.x, p3.y), cv::Point(p1.x, p1.y), colour);
 		}
-		int vertex_idx = std::stoi(converted_name.get());
-		Vec4f vertex = morphable_model.get_shape_model().get_mean_at_point(vertex_idx);
-		model_points.emplace_back(vertex);
-		vertex_indices.emplace_back(vertex_idx);
-		image_points.emplace_back(landmarks[i].coordinates);
 	}
-	return std::make_tuple(image_points, model_points, vertex_indices);
-};
-
-/**
- * @brief Concatenates two std::vector's of the same type and returns the concatenated
- * vector. The elements of the second vector are appended after the first one.
- *
- * @param[in] vec_a First vector.
- * @param[in] vec_b Second vector.
- * @return The concatenated vector.
- */
-template <class T>
-auto concat(const std::vector<T>& vec_a, const std::vector<T>& vec_b)
-{
-	std::vector<T> concatenated_vec;
-	concatenated_vec.reserve(vec_a.size() + vec_b.size());
-	concatenated_vec.insert(std::end(concatenated_vec), std::begin(vec_a), std::end(vec_a));
-	concatenated_vec.insert(std::end(concatenated_vec), std::begin(vec_b), std::end(vec_b));
-	return concatenated_vec;
 };
 
 /**

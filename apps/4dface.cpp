@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
 			Rect ibug_facebox = rescale_facebox(detected_faces[0], 0.85, 0.2);
 
 			current_landmarks = rcr_model.detect(unmodified_frame, ibug_facebox);
-			rcr::draw_landmarks(frame, current_landmarks);
+			rcr::draw_landmarks(frame, current_landmarks, { 0, 0, 255 }); // red, initial landmarks
 
 			have_face = true;
 		}
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
 			auto enclosing_bbox = get_enclosing_bbox(rcr::to_row(current_landmarks));
 			enclosing_bbox = make_bbox_square(enclosing_bbox);
 			current_landmarks = rcr_model.detect(unmodified_frame, enclosing_bbox);
-			rcr::draw_landmarks(frame, current_landmarks, { 0, 255, 0 }); // green, the new optimised landmarks
+			rcr::draw_landmarks(frame, current_landmarks, { 255, 0, 0 }); // blue, the new optimised landmarks
 		}
 
 		// Fit the 3DMM:
@@ -223,6 +223,9 @@ int main(int argc, char *argv[])
 		shape_coefficients = pca_shape_merging.add_and_merge(shape_coefficients);
 		auto merged_shape = morphable_model.get_shape_model().draw_sample(shape_coefficients) + morphablemodel::to_matrix(blendshapes) * Mat(blendshape_coefficients);
 		render::Mesh merged_mesh = morphablemodel::sample_to_mesh(merged_shape, morphable_model.get_color_model().get_mean(), morphable_model.get_shape_model().get_triangle_list(), morphable_model.get_color_model().get_triangle_list(), morphable_model.get_texture_coordinates());
+
+		// Wireframe rendering of mesh of this frame (non-averaged):
+		draw_wireframe(frame, mesh, rendering_params.get_modelview(), rendering_params.get_projection(), fitting::get_opencv_viewport(frame.cols, frame.rows));
 
 		// Render the model in a separate window using the estimated pose, shape and merged texture:
 		Mat rendering;
