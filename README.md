@@ -19,21 +19,21 @@ This is a demo app showing face tracking and 3D Morphable Model fitting on live 
 
 1. Clone with submodules: `git clone --recursive git://github.com/patrikhuber/4dface.git`, or, if you've already cloned it, get the submodules with `git submodule update --init --recursive` inside the `4dface` directory.
 
-2. Make sure you've got boost (>=1.54.0 should do), OpenCV (>=2.4.8), Eigen (>=3.2.0) and a recent compiler (>=gcc-4.9, >=clang-3.6, >=VS2015) installed. For Ubuntu 14.04 and newer, this will do the trick:
+2. Make sure you've got boost (>=1.54.0 should do), OpenCV (>=3.0), Eigen (>=3.3.0) and a recent compiler (>=gcc-5, >=clang-4, >=VS2017) installed. For Ubuntu 14.04 and newer, this will do the trick:
     ```
     sudo add-apt-repository ppa:ubuntu-toolchain-r/test
     sudo apt-get update
-    sudo apt-get install gcc-5 g++-5 libboost-all-dev libeigen3-dev libopencv-dev opencv-data
+    sudo apt-get install gcc-7 g++-7 libboost-all-dev libeigen3-dev libopencv-dev opencv-data
     ```
-    For Windows, get binaries for vc14-64bit (VS2015) from boost.org and opencv.org, and the Eigen headers.
+    For Windows, we recommend [vcpkg](https://github.com/Microsoft/vcpkg/) to install the Boost, OpenCV and Eigen dependencies.
 
 3. Build the app:
     Run from _outside_ the source directory:
     1. `mkdir build && cd build`
 
-    2. `cmake -DCMAKE_INSTALL_PREFIX=../install -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-5 -DCMAKE_CXX_COMPILER=g++-5 -DOpenCV_haarcascades_DIR=/usr/share/opencv/haarcascades/ ../4dface/`
+    2. `cmake -DCMAKE_INSTALL_PREFIX=../install -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DOpenCV_haarcascades_DIR=/usr/share/opencv/haarcascades/ ../4dface/`
 
-    On Windows, add `-G "Visual Studio 14 2015 Win64"`. Also, you will probably need to add `-C ../4dface/initial_cache.cmake` as first argument - copy the file from `initial_cache.cmake.template` and adjust the paths.
+    On Windows, add `-G "Visual Studio 15 2017 Win64"`. Also, you will probably need to add `-C ../4dface/initial_cache.cmake` as first argument - copy the file from `initial_cache.cmake.template` and adjust the paths. Or, with vcpkg, use [`-DCMAKE_TOOLCHAIN_FILE=...`](https://github.com/Microsoft/vcpkg/blob/master/docs/users/integration.md#cmake-toolchain-file-recommended-for-open-source-cmake-projects).
 
     If you get an error about OpenCV\_haarcascades\_DIR, adjust `-DOpenCV_haarcascades_DIR` to point to the directory of `haarcascade_frontalface_alt2.xml` from OpenCV.
 
