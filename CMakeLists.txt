@@ -1,7 +1,7 @@
 project(4dface)
-cmake_minimum_required(VERSION 2.8.10)
+cmake_minimum_required(VERSION 2.8.12)
 set(4dface_VERSION_MAJOR 0)
-set(4dface_VERSION_MINOR 2)
+set(4dface_VERSION_MINOR 3)
 set(4dface_VERSION_PATCH 0)
 set(4dface_VERSION ${4dface_VERSION_MAJOR}.${4dface_VERSION_MINOR}.${4dface_VERSION_PATCH})
 
@@ -43,7 +43,7 @@ set(CPACK_PACKAGE_VERSION_PATCH "${4dface_VERSION_PATCH}")
 include(CPack)
 
 # Find dependencies:
-find_package(OpenCV 2.4.3 REQUIRED core imgproc highgui objdetect) # in 3.0: require videoio? Plus the thing Michael fixed for eos?
+find_package(OpenCV 3 REQUIRED core imgcodecs imgproc highgui videoio objdetect)
 message(STATUS "OpenCV include dir found at ${OpenCV_INCLUDE_DIRS}")
 message(STATUS "OpenCV library dir found at ${OpenCV_LIB_DIR}")
 set_target_properties(${OpenCV_LIBS} PROPERTIES MAP_IMPORTED_CONFIG_RELWITHDEBINFO RELEASE)
@@ -82,10 +82,11 @@ set(superviseddescent_DIR "${CMAKE_SOURCE_DIR}/external/superviseddescent")
 
 set(eos_INCLUDE_DIR "${eos_DIR}/include")
 set(superviseddescent_INCLUDE_DIR "${superviseddescent_DIR}/include")
-set(cereal_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/cereal-1.1.1/include")
+set(cereal_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/cereal/include")
 set(glm_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/glm")
 set(nanoflann_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/nanoflann/include")
 set(eigen3_nnls_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/eigen3-nnls/src")
+set(toml11_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/eos/3rdparty/toml11")
 
 # The new model is not in the repository, download it manually for now:
 if(NOT EXISTS "face_landmarks_model_rcr_68.bin")
@@ -110,6 +111,7 @@ include_directories(${cereal_INCLUDE_DIR})
 include_directories(${glm_INCLUDE_DIR})
 include_directories(${nanoflann_INCLUDE_DIR})
 include_directories(${eigen3_nnls_INCLUDE_DIR})
+include_directories(${toml11_INCLUDE_DIR})
 
 add_executable(4dface apps/4dface.cpp apps/helpers.hpp)
 target_link_libraries(4dface ${OpenCV_LIBS} ${Boost_LIBRARIES})
@@ -117,8 +119,8 @@ target_link_libraries(4dface ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # install targets:
 install(TARGETS 4dface DESTINATION bin)
 install(FILES ${eos_DIR}/share/sfm_shape_3448.bin DESTINATION share)
-install(FILES ${eos_DIR}/share/ibug2did.txt DESTINATION share)
-install(FILES ${eos_DIR}/share/model_contours.json DESTINATION share)
+install(FILES ${eos_DIR}/share/ibug_to_sfm.txt DESTINATION share)
+install(FILES ${eos_DIR}/share/sfm_model_contours.json DESTINATION share)
 install(FILES ${eos_DIR}/share/sfm_3448_edge_topology.json DESTINATION share)
 install(FILES ${eos_DIR}/share/expression_blendshapes_3448.bin DESTINATION share)
 install(FILES ${CMAKE_BINARY_DIR}/face_landmarks_model_rcr_68.bin DESTINATION share)

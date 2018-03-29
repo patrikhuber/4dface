@@ -32,6 +32,8 @@
 #include "glm/mat4x4.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
+#include "Eigen/Core"
+
 #include "opencv2/core/core.hpp"
 
 #include <vector>
@@ -75,8 +77,8 @@ cv::Rect rescale_facebox(cv::Rect facebox, float scaling, float translation_y)
  */
 auto rcr_to_eos_landmark_collection(const rcr::LandmarkCollection<cv::Vec2f>& landmark_collection)
 {
-	eos::core::LandmarkCollection<cv::Vec2f> eos_landmark_collection;
-	std::transform(begin(landmark_collection), end(landmark_collection), std::back_inserter(eos_landmark_collection), [](auto&& lm) { return eos::core::Landmark<cv::Vec2f>{ lm.name, lm.coordinates }; });
+	eos::core::LandmarkCollection<Eigen::Vector2f> eos_landmark_collection;
+        std::transform(begin(landmark_collection), end(landmark_collection), std::back_inserter(eos_landmark_collection), [](auto&& lm) { return eos::core::Landmark<Eigen::Vector2f>{ lm.name, { lm.coordinates[0], lm.coordinates[1] } }; });
 	return eos_landmark_collection;
 };
 
@@ -111,34 +113,6 @@ cv::Rect make_bbox_square(cv::Rect bounding_box)
 	auto center_y = bounding_box.y + bounding_box.height / 2.0;
 	auto box_size = std::max(bounding_box.width, bounding_box.height);
 	return cv::Rect(center_x - box_size / 2.0, center_y - box_size / 2.0, box_size, box_size);
-};
-
-/**
- * Draws the given mesh as wireframe into the image.
- *
- * It does backface culling, i.e. draws only vertices in CCW order.
- *
- * @param[in] image An image to draw into.
- * @param[in] mesh The mesh to draw.
- * @param[in] modelview Model-view matrix to draw the mesh.
- * @param[in] projection Projection matrix to draw the mesh.
- * @param[in] viewport Viewport to draw the mesh.
- * @param[in] colour Colour of the mesh to be drawn.
- */
-void draw_wireframe(cv::Mat image, const eos::render::Mesh& mesh, glm::mat4x4 modelview, glm::mat4x4 projection, glm::vec4 viewport, cv::Scalar colour = cv::Scalar(0, 255, 0, 255))
-{
-	for (const auto& triangle : mesh.tvi)
-	{
-		const auto p1 = glm::project({ mesh.vertices[triangle[0]][0], mesh.vertices[triangle[0]][1], mesh.vertices[triangle[0]][2] }, modelview, projection, viewport);
-		const auto p2 = glm::project({ mesh.vertices[triangle[1]][0], mesh.vertices[triangle[1]][1], mesh.vertices[triangle[1]][2] }, modelview, projection, viewport);
-		const auto p3 = glm::project({ mesh.vertices[triangle[2]][0], mesh.vertices[triangle[2]][1], mesh.vertices[triangle[2]][2] }, modelview, projection, viewport);
-		if (eos::render::detail::are_vertices_ccw_in_screen_space(glm::vec2(p1), glm::vec2(p2), glm::vec2(p3)))
-		{
-			cv::line(image, cv::Point(p1.x, p1.y), cv::Point(p2.x, p2.y), colour);
-			cv::line(image, cv::Point(p2.x, p2.y), cv::Point(p3.x, p3.y), colour);
-			cv::line(image, cv::Point(p3.x, p3.y), cv::Point(p1.x, p1.y), colour);
-		}
-	}
 };
 
 /**
