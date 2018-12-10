@@ -15,6 +15,8 @@ This is a demo app showing face tracking and 3D Morphable Model fitting on live 
 
 (_caveat: due to recent additions, "real time" at the moment means around 5 fps._)
 
+### Note: This is a research demo from 2015/2016. 4dface has since been commercialised and an improved, up-to-date version is available on [www.4dface.io](https://www.4dface.io). This repository also contains an older version of the morphable face model fitting library _eos_. _eos_ is still in active development, head over to [github.com/patrikhuber/eos](https://github.com/patrikhuber/eos) for the latest version.
+
 ## Build & run
 
 1. Clone with submodules: `git clone --recursive git://github.com/patrikhuber/4dface.git`, or, if you've already cloned it, get the submodules with `git submodule update --init --recursive` inside the `4dface` directory.
